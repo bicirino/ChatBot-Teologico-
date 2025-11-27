@@ -1,0 +1,15 @@
+# Ignorar pasta de ambiente virtual (MUITO IMPORTANTE)
+venv/
+.venv/
+env/
+
+# Ignorar arquivos temporários do Python (Corrigido)
+__pycache__/
+*.pyc
+
+# Ignorar banco de dados (Como o seu é pequeno, você pode remover o # da frente se quiser ignorar, ou deixar assim para salvar no GitHub)
+# data/*.db
+# data/*.sqlite
+
+# Ignorar arquivos de senhas (ESSENCIAL)
+.env 
