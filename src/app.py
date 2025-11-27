@@ -6,9 +6,35 @@ import os                                                         #interação c
 import sqlite3                                                    #biblioteca para se conectar e manipular bancos de dados SQLite; 
 from flask import Flask, jsonify, request                         #importa as ferramentas Flask; 
 from flask_cors import CORS                                       #permite que o frontend se comunique com o backend; 
+from dotenv import load_dotenv                                    #capacita a ferramenta para ler arquivo .env; 
+from google import genai 
+from google.genai import types 
+from google.genai.errors import APIError 
+
 
 
 DB_PATH = os.path.join('..', 'data', 'NVI.sqlite.db')             #variável que armazena o caminho do banco de dados SQLite;
+
+#------------------------------------------------------------------------------------------------------------------------
+#Carrega as variáveis do arquivo .env 
+load_dotenv() 
+
+#Abrir chave API do Gemini 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY: 
+    print("ERRO CRÍTICO Chave GEMINI_API_KEY não encontrada no arquivo .env") 
+
+    #Usa uma chave imaginária para permiter que o app inicie (a IA não funcionará sem a chave real)
+    GEMINI_API_KEY = "CHAVE_VAZIA_PARA_TESTE"
+
+try: 
+    client = genai.Client(api_key=GEMINI_API_KEY)
+except Exception as e:
+    print(f"ERRO ao inicializar o cliente Gemini: {e}")
+    client = None
+
+# O caminho está configurado para voltar uma pasta (..) e buscar o arquivo na pasta 'data'
+DB_PATH = os.path.join('..', 'data', 'NVI.sqlite.db')
 
 # ------------------------------------------------------------------------------------------------------------------------
 #FUNÇÃO DE CONEXÃO COM O BANCO DE DADOS: 
