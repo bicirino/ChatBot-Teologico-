@@ -11,10 +11,6 @@ from google import genai
 from google.genai import types 
 from google.genai.errors import APIError 
 
-
-
-DB_PATH = os.path.join('..', 'data', 'NVI.sqlite.db')             #variável que armazena o caminho do banco de dados SQLite;
-
 #------------------------------------------------------------------------------------------------------------------------
 #Carrega as variáveis do arquivo .env 
 load_dotenv() 
@@ -53,113 +49,158 @@ def get_connection():
 # -------------------------------------------------------------------------------------------------------------------------
 #FUNÇÃO DE BUSCA DE VERSÍCULO: 
 
-def fetch_verse_by_name(book_name, chapter, verse):
+def fetch_relevant_verses(query):
     """
-    Busca um versículo específico usando o NOME do livro, capítulo e versículo.
-    Usa JOIN para ligar as tabelas 'book' e 'verse'.
+    Simulação RAG: Retorna versículos relevantes para a pergunta do usuário.
+    Esta função é temporária e retorna 3 versículos fixos para testar a IA.
     """
     conn = get_connection()
     if conn is None:
-        return {"error": "DB_CONNECTION_FAILED"}
+        return None
 
+    # Versículos fixos: Gênesis 1:3, Salmos 23:1, João 14:6
+    fixed_verses = [
+        ("Gênesis", 1, 3), 
+        ("Salmos", 23, 1), 
+        ("João", 14, 6)
+    ]
+    
+    results = []
+    
     try:
         cursor = conn.cursor()
-
-        # Consulta SQL usando JOIN para buscar o texto (T1.text) pelo nome do livro (T2.name)
-        query = """
+        
+        # Consulta SQL para buscar os textos dos versículos fixos
+        query_sql = """
         SELECT T1.text, T2.name AS book_name, T1.chapter, T1.verse
         FROM verse T1
         JOIN book T2 ON T1.book_id = T2.id
-        WHERE T2.name = ? AND T1.chapter = ? AND T1.verse = ?      
+        WHERE T2.name = ? AND T1.chapter = ? AND T1.verse = ?
         """
-
-        cursor.execute(query, (book_name, chapter, verse))         #executa a consulta SQL com os parâmetros fornecidos;
-        result = cursor.fetchone()                                 #retorna apenas um resultado; 
         
-        if result:
-            # Retorna um dicionário com os dados
-            return {
-                "book": result['book_name'],
-                "chapter": result['chapter'],
-                "verse": result['verse'],
-                "text": result['text']
-            }
-        else:
-            return None # Versículo não encontrado
-
+        for book, chapter, verse in fixed_verses:
+            cursor.execute(query_sql, (book, chapter, verse))
+            result = cursor.fetchone()
+            if result:
+                results.append(
+                    f"[{result['book_name']} {result['chapter']}:{result['verse']}]: {result['text']}"
+                )
+        return "\n".join(results)
+        
     except sqlite3.Error as e:
-        return {"error": f"SQL_QUERY_FAILED: {e}"}
+        print(f"SQL_QUERY_FAILED: {e}")
+        return None
     finally:
         conn.close()
 #---------------------------------------------------------------------------------------------------------------------
-#CONFIGURAÇÃO DA APLICAÇÃO FLASK 
+# --- FUNÇÃO DE GERAÇÃO DA RESPOSTA (GEMINI) ---
 
-app = Flask(__name__)                                              #cria a instância da aplicação Flask;
-CORS(app)                                                          #aplica as configurações CORS; 
+def generate_answer_with_gemini(user_query, relevant_context):
+    """
+    Usa o modelo Gemini 2.5 Flash para gerar uma resposta baseada no contexto.
+    Esta é a parte de Raciocínio (Generation).
+    """
+    if not client or GEMINI_API_KEY == "CHAVE_VAZIA_PARA_TESTE":
+        return None, "CLIENT_NOT_INITIALIZED"
+
+    # 1. Definir a Persona e Regras do Sistema (System Instruction)
+    system_instruction = (
+        "Você é Salomão, o ChatBot da Sabedoria. Sua persona é sábia, calma e teológica. "
+        "Sua principal função é responder a perguntas do usuário baseando-se no CONTEXTO "
+        "bíblico fornecido. Mantenha a resposta concisa, direta e sempre cite a referência "
+        "do versículo no final da sua resposta, mesmo que já esteja no contexto."
+    )
+
+    # 2. Montar o Prompt RAG
+    prompt = (
+        f"CONTEXTO BÍBLICO PARA REFERÊNCIA:\n---\n{relevant_context}\n---\n\n"
+        f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
+        "Com base no contexto e em sua sabedoria, forneça uma resposta única, completa e pastoral para o usuário."
+    )
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction
+            )
+        )
+        # Verifica se o conteúdo foi bloqueado por segurança
+        if response.candidates and response.candidates[0].finish_reason == types.FinishReason.SAFETY:
+            return None, "SAFETY_BLOCKED"
+            
+        return response.text, None
+
+    except APIError as e:
+        print(f"ERRO API GEMINI: {e}")
+        return None, "API_ERROR"
+    except Exception as e:
+        print(f"ERRO INESPERADO: {e}")
+        return None, "UNKNOWN_ERROR"
+
+
+#----------------------------------------------------------------------------------------------------------------------
+# --- APLICAÇÃO FLASK (ROUTING) ---
+app = Flask(__name__)
+CORS(app) 
 
 # Rota de Teste Simples
-@app.route('/')                                                    #define uma rota ou endpoint; 
-
-def home():                                                        #função associada à rota raiz; 
+@app.route('/')
+def home():
     """Confirma que o servidor Flask está rodando."""
     return "Bem-vindo ao ChatBot Salomão! O servidor Flask está ativo."
 
-#----------------------------------------------------------------------------------------------------------------------
 # Rota Principal da API do Chat (RF.01)
-@app.route('/api/chat', methods=['POST'])                          #define a rota '/api/chat' que enviará as perguntas dos usuários; 
-
+@app.route('/api/chat', methods=['POST'])
 def process_chat_query():
     """
-    Recebe a pergunta do usuário e simula uma resposta RAG.
-    
-    No futuro (Fase 3), aqui entra o código real da IA que:
-    1. Analisa a pergunta.
-    2. Busca versículos relevantes (via RAG).
-    3. Usa a IA Generativa (Gemini API) para formular a resposta.
+    Recebe a pergunta do usuário, busca o contexto e usa a IA para gerar a resposta.
     """
     try:
-        data = request.get_json()                                 #Lê o corpo da requisição JSON; 
-        user_query = data.get('query', 'Pergunta Vazia')          #Extrai a pergunta do usuário; 
- 
-    
-    except Exception as e:                                        #tratamento de exceções e erros; 
+        data = request.get_json()
+        user_query = data.get('query', 'Pergunta Vazia')
+        
+    except Exception:
         return jsonify({"error": "Formato de requisição JSON inválido."}), 400
 
+    if not client or GEMINI_API_KEY == "CHAVE_VAZIA_PARA_TESTE":
+        return jsonify({"answer": "O servidor não conseguiu inicializar a conexão com a IA. Verifique sua GEMINI_API_KEY no arquivo .env.", "source": "Erro de Chave API"}), 503
 
-
+    # 1. Fase RAG - Retrieval (Busca de Contexto)
+    relevant_context = fetch_relevant_verses(user_query) # CHAMA A NOVA FUNÇÃO
     
-    # TESTE DE INTEGRAÇÃO RAG 
-    
-    # 1. Simulação da busca do versículo (Retrieval)
-    # Aqui, buscamos um versículo(Gênesis 1:3) apenas para testar a comunicação completa.
-    test_result = fetch_verse_by_name('Gênesis', 1, 3) 
-    
-    if test_result and 'error' not in test_result:
-        # 2. Simulação da Resposta da IA (Generation)
-        # O modelo de IA Generativa usaria o 'test_result['text']' para formular a resposta.
-        response_text = (
-            f"Sua pergunta era: '{user_query}'. "
-            f"Como um ponto de partida, o Espírito de Salomão ilumina a passagem: "
-            f"'{test_result['text']}'"
-        )
-        
-        # 3. Retorno JSON (RT.02 e RF.06)
+    if not relevant_context:
         return jsonify({
-            "answer": response_text,
-            "source": f"{test_result['book']} {test_result['chapter']}:{test_result['verse']}",
-            "is_rag_active": False # Marcador para o futuro
-        })
-    else:
-        # Se a busca falhar (provavelmente problema no DB ou na query)
-        error_message = test_result.get('error', 'Falha desconhecida na Base de Dados.')
-        return jsonify({
-            "answer": "Sinto muito, houve um erro crítico ao consultar a Sabedoria Antiga.",
-            "source": f"Erro: {error_message}"
+            "answer": "Sinto muito, houve um erro ao consultar a Base de Dados.",
+            "source": "Erro DB"
         }), 500
 
-#-----------------------------------------------------------------------------------------------------------------
-# Executa o servidor Flask na porta 5000 (padrão)
-if __name__ == '__main__':                                #garante que o código dentro deste bloco só seja executado quando você executa o arquivo diretamente
+    # 2. Fase RAG - Generation (Geração da Resposta com a IA)
+    generated_text, error_code = generate_answer_with_gemini(user_query, relevant_context) # CHAMA O GEMINI
+
+    # 3. Tratamento de Erro da IA
+    if error_code == "API_ERROR" or error_code == "UNKNOWN_ERROR":
+        return jsonify({
+            "answer": "Houve uma falha de comunicação com os Céus. Tente novamente.",
+            "source": f"Erro API: {error_code}"
+        }), 500
+    if error_code == "SAFETY_BLOCKED":
+        return jsonify({
+            "answer": "Sinto muito, essa pergunta tocou em um tópico sensível. Minha Sabedoria está limitada a questões teológicas.",
+            "source": "Bloqueio de Segurança"
+        }), 400
     
-    app.run(debug=True)                                   # 'debug=True'permite que o servidor reinicie automaticamente após alterações
-                                                          # e inicia o servidor web Flask; 
+    # 4. Sucesso: Retorno JSON
+    # A fonte é o contexto que passamos para o modelo
+    source_citation = "Referências usadas: " + relevant_context.replace('\n', ' | ')
+    
+    return jsonify({
+        "answer": generated_text,
+        "source": source_citation,
+        "is_rag_active": True # AGORA DEVE SER TRUE
+    })
+
+# Executa o servidor Flask na porta 5000 (padrão)
+if __name__ == '__main__':
+    app.run(debug=True)
