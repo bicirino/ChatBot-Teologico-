@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=, initial-scale=1.0">
+    <title>ChatBot Salomão </title>
+    <script src = "https://cdn.tailwindcss.com"></script> <!-- Inicia o Tailwind CSS para estilizar -->
+    <link href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel = "stylesheet"> <!-- Importa a fonte Inter do Google Fonts -->"
+
+
+    <style> 
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #111c33; 
+        }
+
+        .chat-bubble { 
+            max-width: 80% ; 
+            padding: 12px 18px; 
+            border-radius: 20px; 
+            margin-bottom: 15px; 
+            word-wrap: break-word; 
+            transition: background-color 0.3s; 
+        }
+
+        .user-message { 
+            background-color: #3B82F6; 
+            color: rgba(255, 255, 255, 0.637); 
+            align-self: flex-end; 
+            border-bottom-right-radius: 5px; 
+        }
+
+        .bot-message { 
+            background-color: #E2E8F0 ; 
+            color: #1E293B; 
+            align-self: flex-start; 
+            border-bottom-left-radius: 5px; 
+        }
+
+        .source-box{ 
+            font-size: 0.75rem; 
+            color: #475569; 
+            border-top: 1px solid #94A3B8 ; 
+            padding-top: 8px; 
+            margin-top: 8px; 
+        }
+        
+        /* Estilo para a animação de carregamento */
+        .loading-dot { 
+            animation: bounce 0.6s infinite alternate;
+        }
+        
+        .loading-dot:nth-child(2) { 
+            animation-delay: 0.2s; 
+        }
+        
+        .loading-dot:nth-child(3){ 
+            animation-delay: 0.4s; 
+        }
+
+        @keyframes bounce { 
+            from { 
+                transform: translateY(0); 
+            }
+            to { 
+                transform: translateY(-5px); 
+            }
+        }
+
+    </style>
+</head>
+<body class = "flex flex-col h-sreen antialiased">
+    <div class =  "flex-grow flex flex-col items-center p-4"> 
+        <header class="w-full max-w-2xl text-center mb-6 p-4 bg-slate-800 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold text-blue-400">Salomão ChatBot</h1>
+            <p class="text-sm text-slate-400 mt-1">Sua fonte de sabedoria RAG (Retrieval-Augmented Generation).</p>
+        </header>
+
+        <!-- Área de Mensagens -->
+        <!-- Fundo Slate-800 para a área de mensagens -->
+        <div id="chat-messages" class="flex-grow w-full max-w-2xl overflow-y-auto p-4 space-y-4 rounded-xl shadow-inner bg-slate-800">
+            <!-- Mensagem de boas-vindas -->
+            <div class="flex justify-start">
+                <div class="chat-bubble bot-message">
+                    <p class="font-semibold text-blue-600">Salomão</p>
+                    <p>Paz seja contigo. Pergunte-me sobre a Palavra e eu lhe darei a Sabedoria de Deus. Meu backend Flask está em execução na porta 5000.</p>
+                </div>
+            </div>
+            <!-- As mensagens aparecerão aqui -->
+        </div>
+        
+        <!-- Formulário de Input -->
+        <div class="w-full max-w-2xl mt-4">
+            <!-- Alerta de erro em vermelho -->
+            <div id="error-alert" class="hidden bg-red-600 text-white p-2 rounded-lg mb-2 text-sm"></div>
+            <div class="flex">
+                <!-- Input com fundo branco e texto escuro para melhor legibilidade -->
+                <input type="text" id="user-input" placeholder="Pergunte sobre a Palavra de Deus..."
+                       class="flex-grow p-3 border-2 border-slate-600 rounded-l-xl focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
+                       onkeypress="if(event.key === 'Enter') sendMessage()">
+                
+                <!-- Botão de Envio em azul discreto -->
+                <button id="send-button" onclick="sendMessage()"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-r-xl hover:bg-blue-700 transition duration-150 disabled:bg-slate-500">
+                    Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const errorAlert = document.getElementById('error-alert');
+        const API_URL = 'http://127.0.0.1:5000/api/chat';
+
+        /**
+         * Adiciona uma mensagem ao contêiner de chat.
+         * @param {string} text O texto principal da mensagem.
+         * @param {string} type 'user' ou 'bot'.
+         * @param {string} source A string de fonte (apenas para 'bot').
+         */
+        function addMessage(text, type, source = null) {
+            const messageContainer = document.createElement('div');
+            messageContainer.className = `flex ${type === 'user' ? 'justify-end' : 'justify-start'}`;
+
+            const messageBubble = document.createElement('div');
+            messageBubble.className = `chat-bubble ${type === 'user' ? 'user-message' : 'bot-message'}`;
+            
+            if (type === 'bot') {
+                const name = document.createElement('p');
+                // Nome do bot em azul para destaque
+                name.className = 'font-semibold text-blue-600'; 
+                name.textContent = 'Salomão';
+                messageBubble.appendChild(name);
+            }
+            
+            const textParagraph = document.createElement('p');
+            textParagraph.textContent = text;
+            messageBubble.appendChild(textParagraph);
+
+            if (type === 'bot' && source) {
+                const sourceBox = document.createElement('div');
+                sourceBox.className = 'source-box'; // Estilo definido no <style> para ser discreto
+                sourceBox.textContent = source;
+                messageBubble.appendChild(sourceBox);
+            }
+
+            messageContainer.appendChild(messageBubble);
+            chatMessages.appendChild(messageContainer);
+
+            // Rola automaticamente para a última mensagem
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        /**
+         * Exibe ou oculta o indicador de carregamento.
+         * @param {boolean} show Se deve mostrar (true) ou ocultar (false).
+         */
+        function toggleLoading(show) {
+            const loadingId = 'loading-indicator';
+            let loadingIndicator = document.getElementById(loadingId);
+            
+            if (show) {
+                if (!loadingIndicator) {
+                    loadingIndicator = document.createElement('div');
+                    loadingIndicator.id = loadingId;
+                    loadingIndicator.className = 'flex justify-start';
+                    loadingIndicator.innerHTML = `
+                        <div class="chat-bubble bot-message flex space-x-1">
+                            <!-- Pontos de carregamento em azul-400 para combinar com o destaque -->
+                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
+                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
+                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
+                        </div>
+                    `;
+                    chatMessages.appendChild(loadingIndicator);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+                sendButton.disabled = true;
+                userInput.disabled = true;
+                sendButton.textContent = 'Aguarde...';
+            } else {
+                if (loadingIndicator) {
+                    loadingIndicator.remove();
+                }
+                sendButton.disabled = false;
+                userInput.disabled = false;
+                sendButton.textContent = 'Enviar';
+            }
+        }
+
+        /**
+         * Envia a mensagem do usuário para o backend Flask.
+         */
+        async function sendMessage() {
+            const query = userInput.value.trim();
+            if (!query) return;
+
+            // 1. Adiciona a mensagem do usuário e limpa o input
+            addMessage(query, 'user');
+            userInput.value = '';
+            errorAlert.classList.add('hidden');
+
+            // 2. Mostra o indicador de carregamento
+            toggleLoading(true);
+
+            try {
+                // 3. Faz a requisição POST para o backend
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: query }),
+                });
+
+                const data = await response.json();
+                
+                // 4. Trata erros HTTP
+                if (!response.ok) {
+                    throw new Error(data.answer || "Erro desconhecido ao comunicar com o servidor.");
+                }
+
+                // 5. Adiciona a resposta da IA
+                addMessage(data.answer, 'bot', data.source);
+
+            } catch (error) {
+                console.error("Erro na comunicação com o backend:", error);
+                const errorMessage = `ERRO: Verifique se o servidor Flask está rodando em ${API_URL}. Detalhes: ${error.message}`;
+                errorAlert.textContent = errorMessage;
+                errorAlert.classList.remove('hidden');
+                addMessage("Sinto muito, a conexão com o Reino falhou. Por favor, verifique o console para mais detalhes.", 'bot', "Erro Crítico de Rede/Servidor");
+            } finally {
+                // 6. Esconde o indicador de carregamento
+                toggleLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>
