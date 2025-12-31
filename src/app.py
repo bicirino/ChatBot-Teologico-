@@ -1,5 +1,4 @@
 # --- Declaração de variáveis e importações --- 
-
 import os 
 import sqlite3
 from flask import Flask, jsonify, request
@@ -7,19 +6,16 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from google.genai.errors import APIError 
 
 # ____________________________________________________________________________________________________________________________________________
 # --- CONFIGURAÇÃO DE SEGURANÇA E BANCO DE DADOS ---
 
-# Carrega as variáveis de ambiente
 load_dotenv() 
 
 # Tenta obter a chave API do Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("ERRO CRÍTICO: Chave GEMINI_API_KEY não encontrada no arquivo .env")
-    GEMINI_API_KEY = "" # Mantido vazio para evitar erros de inicialização se faltar no env
 
 # Inicializa o Cliente Gemini
 try:
@@ -28,11 +24,13 @@ except Exception as e:
     print(f"ERRO ao inicializar o cliente Gemini: {e}")
     client = None
 
-# Caminho do banco de dados (ajustado para subir um nível se necessário)
+# Caminho do banco de dados (Ajuste aqui se o arquivo estiver na mesma pasta)
 DB_PATH = os.path.join('..', 'data', 'NVI.sqlite.db')
 
+load_dotenv()
+
 #_____________________________________________________________________________________________________________________________________________
-# --- FUNÇÕES DE CONEXÃO E BUSCA (RETRIEVAL) ---
+# --- FUNÇÕES DE CONEXÃO E BANCO DE DADOS ---
 
 def get_connection():
     """Cria e retorna a conexão com o banco de dados."""
@@ -44,10 +42,37 @@ def get_connection():
         print(f"ERRO DE CONEXÃO DB: {e}")
         return None
 
+def init_db():
+    """Verifica se a tabela de busca FTS existe, caso contrário, cria e popula."""
+    conn = get_connection()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor()
+        # Verifica se a tabela virtual já existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='full_text_search'")
+        if not cursor.fetchone():
+            print("Configurando a sabedoria dos manuscritos (Criando FTS)...")
+            # Cria a tabela de busca por texto completo (FTS5)
+            cursor.execute("""
+                CREATE VIRTUAL TABLE full_text_search USING fts5(
+                    text, 
+                    content='verse', 
+                    content_rowid='id'
+                );
+            """)
+            # Alimenta a tabela com os dados da tabela 'verse'
+            cursor.execute("INSERT INTO full_text_search(rowid, text) SELECT id, text FROM verse;")
+            conn.commit()
+            print("Banco de dados pronto para buscas!")
+    except sqlite3.Error as e:
+        print(f"Aviso ao inicializar DB (pode ser que as tabelas base não existam): {e}")
+    finally:
+        conn.close()
+
 def fetch_relevant_verses(query):
-    """
-    Realiza a busca dinâmica usando FTS (Full Text Search).
-    """
+    """Realiza a busca dinâmica usando FTS (Full Text Search)."""
     conn = get_connection()
     if not conn:
         return None
@@ -55,7 +80,7 @@ def fetch_relevant_verses(query):
     try:
         cursor = conn.cursor()
         
-        # 1. Fase de Busca (FTS): Obtém rowids
+        # 1. Busca os IDs dos versículos que dão 'match' com a pergunta
         cursor.execute(
             "SELECT rowid FROM full_text_search WHERE full_text_search MATCH ? LIMIT 5",
             (query,)
@@ -67,7 +92,7 @@ def fetch_relevant_verses(query):
         if not verse_ids:
             return ""
 
-        # 2. Fase de Recuperação: Busca textos usando os IDs encontrados
+        # 2. Recupera os detalhes (Livro, Capítulo, Versículo e Texto)
         placeholders = ','.join('?' * len(verse_ids))
         detail_query = f"""
             SELECT T1.text, T2.name AS book_name, T1.chapter, T1.verse
@@ -99,12 +124,11 @@ def generate_answer_with_gemini(user_query, relevant_context):
 
     system_instruction = (
         "Você é Salomão, o ChatBot da Sabedoria. Sua persona é sábia, calma e teológica. "
-        "Responda como um conselheiro. Priorize o CONTEXTO bíblico fornecido. "
-        "Mantenha a resposta concisa e sempre cite a referência no final. "
-        "Se o contexto for vazio, use seu conhecimento geral bíblico."
+        "Responda como um conselheiro. Priorize o CONTEXTO bíblico fornecido abaixo. "
+        "Se o contexto for vazio, use seu conhecimento geral bíblico para responder. "
+        "Mantenha a resposta concisa e cite a referência ao final."
     )
 
-    # Melhoria no Prompt para garantir que a IA entenda o contexto dinâmico
     prompt = (
         f"CONTEXTO BÍBLICO DISPONÍVEL:\n{relevant_context if relevant_context else 'Nenhum versículo específico encontrado.'}\n\n"
         f"PERGUNTA DO USUÁRIO: {user_query}"
@@ -112,18 +136,15 @@ def generate_answer_with_gemini(user_query, relevant_context):
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash-preview-09-2025', # Modelo atualizado para versão estável do preview
+            model='gemini-1.5-flash-8b', # Atualizado para um nome de modelo estável
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction
             )
         )
         
-        if not response.candidates:
-            return None, "NO_RESPONSE_CANDIDATES"
-
-        if response.candidates[0].finish_reason == types.FinishReason.SAFETY:
-            return None, "SAFETY_BLOCKED"
+        if not response.text:
+            return None, "NO_RESPONSE"
             
         return response.text, None
 
@@ -136,6 +157,10 @@ def generate_answer_with_gemini(user_query, relevant_context):
 
 app = Flask(__name__)
 CORS(app) 
+
+# Inicializa o banco ao subir o app
+with app.app_context():
+    init_db()
 
 @app.route('/')
 def home():
@@ -152,7 +177,7 @@ def process_chat_query():
     except Exception:
         return jsonify({"error": "JSON inválido."}), 400
 
-    # 1. Retrieval
+    # 1. Busca contexto no banco de dados (RAG)
     relevant_context = fetch_relevant_verses(user_query)
     
     if relevant_context is None:
@@ -161,7 +186,7 @@ def process_chat_query():
             "source": "Erro DB"
         }), 500
 
-    # 2. Generation
+    # 2. Envia para a IA gerar a resposta
     generated_text, error_code = generate_answer_with_gemini(user_query, relevant_context) 
 
     if error_code:
@@ -170,8 +195,8 @@ def process_chat_query():
             "source": f"Erro: {error_code}"
         }), 500
     
-    # 3. Sucesso
-    source_citation = "Referências dinâmicas: " + relevant_context.replace('\n', ' | ') if relevant_context else "Conhecimento geral."
+    # 3. Formata as fontes e responde
+    source_citation = "Referências: " + relevant_context.replace('\n', ' | ') if relevant_context else "Conhecimento geral."
 
     return jsonify({
         "answer": generated_text,
