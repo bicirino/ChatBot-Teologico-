@@ -38,6 +38,11 @@ def get_connection():
         # Verifica se o ficheiro existe antes de tentar abrir
         if not os.path.exists(DB_PATH):
             print(f"⚠️ AVISO: Ficheiro de base de dados não encontrado em: {DB_PATH}")
+            return None
+        
+        conn = sqlite3.connect(DB_PATH)
+        return conn
+    except Exception as e:
         print(f"❌ Erro ao abrir arquivo .db: {e}")
         return None
 
