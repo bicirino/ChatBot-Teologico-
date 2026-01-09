@@ -130,7 +130,7 @@ def ask_solomon(user_query, context):
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.7,
-                    max_output_tokens=1024,
+                    max_output_tokens=4048,
                 )
             )
             print(f"✅ Sucesso com {model_name}")
