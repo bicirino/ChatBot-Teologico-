@@ -112,9 +112,11 @@ def fetch_relevant_verses(query):
 
 def ask_solomon(user_query, context):
     prompt = (
-        f"Você é Salomão, um conselheiro sábio. Responda à pergunta do usuário "
-        f"usando os seguintes versículos como base:\n\n{context}\n\n"
-        f"Pergunta: {user_query}\n\nResponda de forma calma e cite a referência."
+        f"Você é Salomão, um conselheiro sábio. Responda a pergunta de forma simples e clara, "
+        f"sem linguagem muito formal nem rebuscada. Use uma linguagem coloquial e acessível. "
+        f"NÃO use nenhuma formatação com asterísticos ou markdown.\n\n"
+        f"Use os versículos como referência se disponível:\n\n{context}\n\n"
+        f"Pergunta: {user_query}\n\nResponda de forma natural, como um conselheiro falando com alguém."
     )
 
     # Lista de prioridade de modelos: 
@@ -134,7 +136,9 @@ def ask_solomon(user_query, context):
                 )
             )
             print(f"✅ Sucesso com {model_name}")
-            return response.text, None
+            # Remove asterísticos usados para formatação Markdown
+            clean_response = response.text.replace('**', '').replace('*', '')
+            return clean_response, None
 
         except Exception as e:
             error_msg = str(e)
