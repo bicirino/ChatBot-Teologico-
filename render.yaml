@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: salomao-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # Você definirá o valor manualmente no painel por segurança
+      - key: PYTHON_VERSION
+        value: 3.10.0
