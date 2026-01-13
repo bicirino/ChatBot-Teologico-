@@ -31,3 +31,9 @@ Interface simples, intuitiva e preparada para troca rápida de mensagens.
 O usuário pode visualizar o histórico da conversa durante a sessão.
 
 
+
+## ⚖ Licença 
+
+Este projeto é licenciado pelo licença: MIT 
+
+
