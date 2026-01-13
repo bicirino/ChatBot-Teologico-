@@ -59,7 +59,7 @@ PROJETO SALOMÃO/
 7. Ative o servidor com o comando: **"python app.py"**;
 8. Abra o arquivo **"index.html"** e teste diretamente no Vscode ou use o link para abrir no seu Browser.
 
-**obs:** certifique que você tenha as bibliotecas seguintes instaladas: 
+**obs:** certifique-se que você tenha as bibliotecas seguintes instaladas: 
 **Flask** | **flask-cors** | **google-genai** | **pythondotenv**
           
          
