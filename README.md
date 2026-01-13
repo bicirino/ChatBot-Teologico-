@@ -30,6 +30,31 @@ Interface simples, intuitiva e preparada para troca rápida de mensagens.
 
 O usuário pode visualizar o histórico da conversa durante a sessão.
 
+## 🛠 Estrutura do projeto 
+```
+PROJETO SALOMÃO/
+├── src/                    # Pasta principal do código-fonte   
+│   ├── app.py              # Servidor Flask 
+│   └── NVI.sqlite.db       # Banco de dados da Bíblia NVI
+|   └── .env                # Chaves de API 
+|   └── index.html          # Interface visual do ChatBot (Frontend)
+|
+├── venv/                   # Ambiente virtual Python 
+├── .gitignore              # Lista de arquivos ignorados pelo Git
+├── LICENSE                 # Licença do projeto
+├── README.md               # Documentação principal do projeto
+
+```
+
+## 🕹 Como iniciar o sistema? 
+
+1. **Clone o repositório** para seu computador; 
+2. Inicie o **ambiente virtual venv**: 
+      -  ``` Use o comando:  "Set-ExecutionPolicy RemoteSigned -Scope Process" para liberar temporariamente o acesso à segurança; ```
+      -  ``` Use o comando: ".\venv\Scripts\activate" para ativar o ambiente virtual;```
+3. Com o ambiente virtual ativado, **mude para a pasta "src"** - onde o servidor Flask está localizado;
+4. Ative o servidor com o comando: **"python app.py"**;
+5. Abra o arquivo **"index.html"** e teste diretamente no Vscode ou use o link para abrir no seu Browser. 
 
 
 ## ⚖ Licença 
