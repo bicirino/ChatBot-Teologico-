@@ -57,7 +57,13 @@ PROJETO SALOMÃO/
       -  ``` Use o comando: ".\venv\Scripts\activate" para ativar o ambiente virtual;```
 6. Com o ambiente virtual ativado, **mude para a pasta "src"** - onde o servidor Flask está localizado;
 7. Ative o servidor com o comando: **"python app.py"**;
-8. Abra o arquivo **"index.html"** e teste diretamente no Vscode ou use o link para abrir no seu Browser. 
+8. Abra o arquivo **"index.html"** e teste diretamente no Vscode ou use o link para abrir no seu Browser.
+
+**obs:** certifique que você tenha as bibliotecas seguintes instaladas: 
+**Flask** | **flask-cors** | **google-genai** | **pythondotenv**
+          
+         
+          
 
 
 ## ⚖ Licença 
