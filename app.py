@@ -1,225 +1,186 @@
-#  O arquivo app.py é responsável por gerenciar a conexão com o banco de dados SQLite, implementar a lógica de busca 
-# de texto bílico e iniciar o servidor Flask ; 
+import os 
+import sqlite3
+import re
+from flask import Flask, jsonify, request, make_response
+from flask_cors import CORS
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
-# -----------------------------------------------------------------------------------------------------------------------
-import os                                                         #interação com o sistema operacional; 
-import sqlite3                                                    #biblioteca para se conectar e manipular bancos de dados SQLite; 
-from flask import Flask, jsonify, request                         #importa as ferramentas Flask; 
-from flask_cors import CORS                                       #permite que o frontend se comunique com o backend; 
-from dotenv import load_dotenv                                    #capacita a ferramenta para ler arquivo .env; 
-from google import genai 
-from google.genai import types 
-from google.genai.errors import APIError 
+# --- INICIALIZAÇÃO E CONFIGURAÇÕES ---
 
-#------------------------------------------------------------------------------------------------------------------------
-#Carrega as variáveis do arquivo .env 
 load_dotenv() 
 
-#Abrir chave API do Gemini 
+app = Flask(__name__)
+
+# CONFIGURAÇÃO DE CORS ROBUSTA:
+# Permitimos todas as origens (*), métodos e headers para garantir que a Vercel/Frontend conecte sem problemas.
+# Adicionamos suporte a 'Content-Type' para evitar erros em requisições JSON.
+CORS(app, resources={r"/api/*": {
+    "origins": "*", 
+    "methods": ["POST", "OPTIONS"], 
+    "allow_headers": ["Content-Type", "Authorization"]
+}})
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY: 
-    print("ERRO CRÍTICO Chave GEMINI_API_KEY não encontrada no arquivo .env") 
 
-    #Usa uma chave imaginária para permiter que o app inicie (a IA não funcionará sem a chave real)
-    GEMINI_API_KEY = "CHAVE_VAZIA_PARA_TESTE"
+# Localização automática do banco de dados (Caminho Absoluto)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'NVI.sqlite.db')
 
-try: 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+# Inicializa o Cliente Gemini
+try:
+    if not GEMINI_API_KEY:
+        print("❌ ERRO: GEMINI_API_KEY não encontrada nas variáveis de ambiente.")
+    else:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✨ Cliente Gemini inicializado com sucesso.")
 except Exception as e:
-    print(f"ERRO ao inicializar o cliente Gemini: {e}")
+    print(f"❌ Erro ao inicializar Google AI: {e}")
     client = None
 
-# O caminho está configurado para voltar uma pasta (..) e buscar o arquivo na pasta 'data'
-DB_PATH = os.path.join('..', 'data', 'NVI.sqlite.db')
+# --- LÓGICA DE BANCO DE DADOS (RAG) ---
 
-# ------------------------------------------------------------------------------------------------------------------------
-#FUNÇÃO DE CONEXÃO COM O BANCO DE DADOS: 
-def get_connection():                                             
-    """Cria e retorna a conexão com o banco de dados."""
+def get_connection():
     try:
-        conn = sqlite3.connect(DB_PATH)                           #abre conexão com o banco de dados SQLite; 
-        conn.row_factory = sqlite3.Row                            #configura os resultados para estrutura ({'nome_coluna': 'valor'}); 
+        # Check_same_thread=False é importante para servidores multithread como Gunicorn
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
         return conn
-    
-    except sqlite3.Error as e:                                    #abre o bloco de tratamento de erros; 
-        print(f"ERRO CRÍTICO: Não foi possível conectar ao banco de dados em {DB_PATH}.")
-        print(f"Detalhes do Erro: {e}")
+    except sqlite3.Error as e:
+        print(f"❌ Erro de conexão com SQLite: {e}")
         return None
 
 def init_db():
-    print(f"🔍 Verificando base de dados em: {DB_PATH}...")
     conn = get_connection()
-    if not conn: 
-        print("❌ Falha crítica: Não foi possível estabelecer conexão com o SQLite.")
-        return
+    if not conn: return
     try:
         cursor = conn.cursor()
+        # Verifica se a tabela virtual FTS5 existe
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='full_text_search'")
         if not cursor.fetchone():
-            print("⚙️ Criando índice de busca nos manuscritos (FTS5)...")
-            cursor.execute("""
-                CREATE VIRTUAL TABLE full_text_search USING fts5(
-                    text, 
-                    content='verse', 
-                    content_rowid='id'
-                );
-            """)
+            print("⚙️ Criando índice FTS5 para busca bíblica...")
+            cursor.execute("CREATE VIRTUAL TABLE full_text_search USING fts5(text, content='verse', content_rowid='id');")
             cursor.execute("INSERT INTO full_text_search(rowid, text) SELECT id, text FROM verse;")
             conn.commit()
-            print("✅ Índice FTS5 criado e populado com sucesso.")
-        else:
-            print("✅ Índice de busca já existente e pronto a usar.")
+            print("✅ Índice FTS5 criado com sucesso.")
     except sqlite3.Error as e:
-        print(f"❌ Erro ao inicializar tabelas: {e}. Verifique se a tabela 'verse' existe.")
+        print(f"❌ Erro na inicialização do FTS5: {e}")
     finally:
         conn.close()
-    print("📜 Salomão está pronto para consultar os manuscritos.")
 
 def fetch_relevant_verses(query):
-    """
-    Simulação RAG: Retorna versículos relevantes para a pergunta do usuário.
-    Esta função é temporária e retorna 3 versículos fixos para testar a IA.
-    """
     conn = get_connection()
-    if conn is None:
-        return None
-
-    # Versículos fixos: Gênesis 1:3, Salmos 23:1, João 14:6
-    fixed_verses = [
-        ("Gênesis", 1, 3), 
-        ("Salmos", 23, 1), 
-        ("João", 14, 6)
-    ]
-    
-    results = []
-    
+    if not conn: return None
     try:
         cursor = conn.cursor()
-        
-        # Consulta SQL para buscar os textos dos versículos fixos
-        query_sql = """
-        SELECT T1.text, T2.name AS book_name, T1.chapter, T1.verse
-        FROM verse T1
-        JOIN book T2 ON T1.book_id = T2.id
-        WHERE T2.name = ? AND T1.chapter = ? AND T1.verse = ?
+        # Limpa a query para evitar caracteres especiais que quebram o FTS5
+        clean_query = re.sub(r'[^\w\s]', '', query)
+        if not clean_query.strip(): return ""
+
+        # Busca IDs relevantes via FTS5
+        cursor.execute("SELECT rowid FROM full_text_search WHERE full_text_search MATCH ? LIMIT 5", (f'"{clean_query}"',))
+        ids = [row[0] for row in cursor.fetchall()]
+        if not ids: return ""
+
+        # Recupera os textos e referências
+        placeholders = ','.join('?' * len(ids))
+        query_str = f"""
+            SELECT T1.text, T2.name AS book, T1.chapter, T1.verse 
+            FROM verse T1 
+            JOIN book T2 ON T1.book_id = T2.id 
+            WHERE T1.id IN ({placeholders})
         """
-        cursor.execute(query_sql, ids)
+        cursor.execute(query_str, ids)
         results = cursor.fetchall()
         return "\n".join([f"[{r['book']} {r['chapter']}:{r['verse']}]: {r['text']}" for r in results])
     except sqlite3.Error as e:
-        print(f"SQL_QUERY_FAILED: {e}")
+        print(f"❌ Erro na busca FTS5: {e}")
         return None
     finally:
         conn.close()
-#---------------------------------------------------------------------------------------------------------------------
-# --- FUNÇÃO DE GERAÇÃO DA RESPOSTA (GEMINI) ---
 
-def generate_answer_with_gemini(user_query, relevant_context):
+# --- LÓGICA DE IA ---
+
+def ask_solomon(user_query, context):
+    if not client: 
+        return "O espírito de sabedoria está em silêncio (IA Offline).", "Erro de Configuração"
+    
+    prompt = f"""
+    Você é o Rei Salomão, conhecido por sua imensa sabedoria bíblica.
+    Responda à pergunta de forma sábia, pastoral e equilibrada.
+    Se houver contexto bíblico abaixo, use-o para fundamentar sua resposta.
+    
+    Contexto Bíblico Local:
+    {context}
+    
+    Pergunta do Buscador: {user_query}
     """
-    Usa o modelo Gemini 2.5 Flash para gerar uma resposta baseada no contexto.
-    Esta é a parte de Raciocínio (Generation).
-    """
-    if not client or GEMINI_API_KEY == "CHAVE_VAZIA_PARA_TESTE":
-        return None, "CLIENT_NOT_INITIALIZED"
-
-    # 1. Definir a Persona e Regras do Sistema (System Instruction)
-    system_instruction = (
-        "Você é Salomão, o ChatBot da Sabedoria. Sua persona é sábia, calma e teológica. "
-        "Sua principal função é responder a perguntas do usuário baseando-se no CONTEXTO "
-        "bíblico fornecido. Mantenha a resposta concisa, direta e sempre cite a referência "
-        "do versículo no final da sua resposta, mesmo que já esteja no contexto."
-    )
-
-    # 2. Montar o Prompt RAG
-    prompt = (
-        f"CONTEXTO BÍBLICO PARA REFERÊNCIA:\n---\n{relevant_context}\n---\n\n"
-        f"PERGUNTA DO USUÁRIO: {user_query}\n\n"
-        "Com base no contexto e em sua sabedoria, forneça uma resposta única, completa e pastoral para o usuário."
-    )
-
+    
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction
-            )
-        )
-        # Verifica se o conteúdo foi bloqueado por segurança
-        if response.candidates and response.candidates[0].finish_reason == types.FinishReason.SAFETY:
-            return None, "SAFETY_BLOCKED"
-            
+        response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
         return response.text, None
-
-    except APIError as e:
-        print(f"ERRO API GEMINI: {e}")
-        return None, "API_ERROR"
     except Exception as e:
-        print(f"ERRO INESPERADO: {e}")
-        return None, "UNKNOWN_ERROR"
+        print(f"❌ Erro Gemini: {e}")
+        return None, str(e)
 
+# --- ROTAS DA API ---
 
-#----------------------------------------------------------------------------------------------------------------------
-# --- APLICAÇÃO FLASK (ROUTING) ---
-app = Flask(__name__)
-CORS(app) 
-
-# Rota de Teste Simples
 @app.route('/')
 def home():
-    """Confirma que o servidor Flask está rodando."""
-    return "Bem-vindo ao ChatBot Salomão! O servidor Flask está ativo."
-
-# Rota Principal da API do Chat (RF.01)
-@app.route('/api/chat', methods=['POST'])
-def process_chat_query():
-    """
-    Recebe a pergunta do usuário, busca o contexto e usa a IA para gerar a resposta.
-    """
-    try:
-        data = request.get_json()
-        user_query = data.get('query', 'Pergunta Vazia')
-        
-    except Exception:
-        return jsonify({"error": "Formato de requisição JSON inválido."}), 400
-
-    if not client or GEMINI_API_KEY == "CHAVE_VAZIA_PARA_TESTE":
-        return jsonify({"answer": "O servidor não conseguiu inicializar a conexão com a IA. Verifique sua GEMINI_API_KEY no arquivo .env.", "source": "Erro de Chave API"}), 503
-
-    # 1. Fase RAG - Retrieval (Busca de Contexto)
-    relevant_context = fetch_relevant_verses(user_query) # CHAMA A NOVA FUNÇÃO
-    
-    if not relevant_context:
-        return jsonify({
-            "answer": "Sinto muito, houve um erro ao consultar a Base de Dados.",
-            "source": "Erro DB"
-        }), 500
-
-    # 2. Fase RAG - Generation (Geração da Resposta com a IA)
-    generated_text, error_code = generate_answer_with_gemini(user_query, relevant_context) # CHAMA O GEMINI
-
-    # 3. Tratamento de Erro da IA
-    if error_code == "API_ERROR" or error_code == "UNKNOWN_ERROR":
-        return jsonify({
-            "answer": "Houve uma falha de comunicação com os Céus. Tente novamente.",
-            "source": f"Erro API: {error_code}"
-        }), 500
-    if error_code == "SAFETY_BLOCKED":
-        return jsonify({
-            "answer": "Sinto muito, essa pergunta tocou em um tópico sensível. Minha Sabedoria está limitada a questões teológicas.",
-            "source": "Bloqueio de Segurança"
-        }), 400
-    
-    # 4. Sucesso: Retorno JSON
-    # A fonte é o contexto que passamos para o modelo
-    source_citation = "Referências usadas: " + relevant_context.replace('\n', ' | ')
-    
     return jsonify({
-        "answer": generated_text,
-        "source": source_citation,
-        "is_rag_active": True # AGORA DEVE SER TRUE
+        "status": "online",
+        "message": "Servidor do Salomão ativo e pronto para pedidos."
     })
 
-# Executa o servidor Flask na porta 5000 (padrão)
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
+def chat():
+    # Tratamento explícito de OPTIONS (Preflight do Navegador)
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "Content-Type, Authorization")
+        response.headers.add('Access-Control-Allow-Methods', "POST, OPTIONS")
+        return response, 204
+        
+    try:
+        data = request.get_json()
+        if not data or 'query' not in data:
+            return jsonify({"answer": "Por favor, envie uma pergunta válida.", "source": "Sistema"}), 400
+            
+        pergunta = data.get('query', '')
+        
+        # Busca contexto no banco de dados local
+        contexto = fetch_relevant_verses(pergunta) or ""
+        
+        # Gera resposta com a IA
+        resposta, erro = ask_solomon(pergunta, contexto)
+        
+        if erro:
+            return jsonify({
+                "answer": "Houve uma interrupção na conexão celestial. Tente novamente em breve.", 
+                "source": "Erro Técnico"
+            }), 500
+
+        # Prepara a resposta JSON
+        res_data = {
+            "answer": resposta,
+            "source": "Escrituras Consultadas: " + contexto.replace('\n', ' | ') if contexto else "Sabedoria Teológica Geral."
+        }
+        
+        response = make_response(jsonify(res_data))
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
+
+    except Exception as e:
+        print(f"❌ Erro na Rota Chat: {e}")
+        return jsonify({"answer": "Ocorreu um erro inesperado no templo.", "error": str(e)}), 500
+
+# --- INICIALIZAÇÃO ---
 if __name__ == '__main__':
-    app.run(host = '0.0 .0.0', port=5000)
+    # Inicializa o banco antes de rodar o app
+    init_db()
+    
+    # O Render usa a porta da variável de ambiente PORT
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
