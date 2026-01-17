@@ -15,7 +15,10 @@ Deve interpretar perguntas envolvendo:
 
 ## 🏗️ Arquitetura Técnica
 **Backend**: 
-Desenvolvido em Python;
+Desenvolvido em Python(Flask);
+
+**IA** 
+Google Gemini 1.5 Flash;
 
 **Frontend**: 
 Construído com HTML + CSS;
@@ -54,6 +57,7 @@ PROJETO SALOMÃO/
           ```GEMINI_API_KEY=CHAVE FORNECIDA PELO AUTOR ``` 
 5. Inicie o **ambiente virtual venv**: 
       -  ``` Use o comando:  "Set-ExecutionPolicy RemoteSigned -Scope Process" para liberar temporariamente o acesso à segurança; ```
+      -  ``` Use o comando "python -m venv venv" para criar seu ambiente virtual; ```
       -  ``` Use o comando: ".\venv\Scripts\activate" para ativar o ambiente virtual;```
 6. Com o ambiente virtual ativado, **mude para a pasta "src"** - onde o servidor Flask está localizado;
 7. Ative o servidor com o comando: **"python app.py"**;
