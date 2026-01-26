@@ -1,243 +1,212 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=, initial-scale=1.0">
-    <title>ChatBot Salomão </title>
-    <script src = "https://cdn.tailwindcss.com"></script> <!-- Inicia o Tailwind CSS para estilizar -->
-    <link href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel = "stylesheet"> <!-- Importa a fonte Inter do Google Fonts -->"
-
-
-    <style> 
-
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #111c33; 
-        }
-
-        .chat-bubble { 
-            max-width: 80% ; 
-            padding: 12px 18px; 
-            border-radius: 20px; 
-            margin-bottom: 15px; 
-            word-wrap: break-word; 
-            transition: background-color 0.3s; 
-        }
-
-        .user-message { 
-            background-color: #3B82F6; 
-            color: rgba(255, 255, 255, 0.637); 
-            align-self: flex-end; 
-            border-bottom-right-radius: 5px; 
-        }
-
-        .bot-message { 
-            background-color: #E2E8F0 ; 
-            color: #1E293B; 
-            align-self: flex-start; 
-            border-bottom-left-radius: 5px; 
-        }
-
-        .source-box{ 
-            font-size: 0.75rem; 
-            color: #475569; 
-            border-top: 1px solid #94A3B8 ; 
-            padding-top: 8px; 
-            margin-top: 8px; 
-        }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salomão AI - Chat Teológico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+        .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #475569; }
         
-        /* Estilo para a animação de carregamento */
-        .loading-dot { 
-            animation: bounce 0.6s infinite alternate;
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
         }
-        
-        .loading-dot:nth-child(2) { 
-            animation-delay: 0.2s; 
-        }
-        
-        .loading-dot:nth-child(3){ 
-            animation-delay: 0.4s; 
-        }
-
-        @keyframes bounce { 
-            from { 
-                transform: translateY(0); 
-            }
-            to { 
-                transform: translateY(-5px); 
-            }
-        }
-
     </style>
 </head>
-<body class = "flex flex-col h-sreen antialiased">
-    <div class =  "flex-grow flex flex-col items-center p-4"> 
-        <header class="w-full max-w-2xl text-center mb-6 p-4 bg-slate-800 rounded-xl shadow-lg">
-            <h1 class="text-3xl font-bold text-blue-400">ChatBot Salomão </h1>
-            <p class="text-sm text-slate-400 mt-1">Seu ajudante no estudo teológico</p>
-        </header>
+<body class="bg-[#0f172a] text-slate-100 h-screen overflow-hidden flex font-sans">
 
-        <!-- Área de Mensagens -->
-        <!-- Fundo Slate-800 para a área de mensagens -->
-        <div id="chat-messages" class="flex-grow w-full max-w-2xl overflow-y-auto p-4 space-y-4 rounded-xl shadow-inner bg-slate-800">
-            <!-- Mensagem de boas-vindas -->
-            <div class="flex justify-start">
-                <div class="chat-bubble bot-message">
-                    <p class="font-semibold text-blue-600">Salomão</p>
-                    <p>Olá! Seja bem-vindo ao ChatBot Salomão! </p>
-                    <p>Estou aqui para ajudar você a explorar a Palavra de Deus. Pergunte-me qualquer coisa relacionada à Bíblia, e farei o meu melhor para fornecer respostas fundamentadas nas Escrituras Sagradas.</p>
-                </div>
-            </div>
-            <!-- As mensagens aparecerão aqui -->
+    <!-- BARRA LATERAL -->
+    <aside class="w-72 bg-slate-900 border-r border-slate-800 hidden md:flex flex-col">
+        <div class="p-6 border-b border-slate-800">
+            <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+                Salomão AI
+            </h2>
         </div>
         
-        <!-- Formulário de Input -->
-        <div class="w-full max-w-2xl mt-4">
-            <!-- Alerta de erro em vermelho -->
-            <div id="error-alert" class="hidden bg-red-600 text-white p-2 rounded-lg mb-2 text-sm"></div>
-            <div class="flex">
-                <!-- Input com fundo branco e texto escuro para melhor legibilidade -->
-                <input type="text" id="user-input" placeholder="Pergunte sobre a Palavra de Deus..."
-                       class="flex-grow p-3 border-2 border-slate-600 rounded-l-xl focus:ring-blue-500 focus:border-blue-500 bg-white text-slate-900"
-                       onkeypress="if(event.key === 'Enter') sendMessage()">
-                
-                <!-- Botão de Envio em azul discreto -->
-                <button id="send-button" onclick="sendMessage()"
-                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-r-xl hover:bg-blue-700 transition duration-150 disabled:bg-slate-500">
-                    Enviar
+        <div class="flex-1 overflow-y-auto sidebar-scroll p-4">
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Conversas Recentes</h3>
+                <button onclick="loadHistory()" class="text-slate-500 hover:text-blue-400 transition-colors" title="Atualizar Histórico">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
             </div>
+            <div id="history-list" class="space-y-2">
+                <div class="animate-pulse space-y-2 p-2">
+                    <div class="h-8 bg-slate-800 rounded"></div>
+                    <div class="h-8 bg-slate-800 rounded"></div>
+                </div>
+            </div>
         </div>
-    </div>
+
+        <div class="p-4 border-t border-slate-800 text-[10px] text-slate-500 text-center">
+            Baseado na Bíblia NVI
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 flex flex-col h-full bg-[#1e293b] relative">
+        <div class="md:hidden p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+            <h1 class="text-lg font-bold text-blue-400">Salomão AI</h1>
+        </div>
+
+        <div id="chat-window" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 chat-scroll">
+            <div class="flex justify-start fade-in">
+                <div class="bg-slate-800 p-4 rounded-2xl rounded-tl-none max-w-[85%] border border-slate-700 shadow-lg">
+                    <p class="text-blue-400 text-[10px] font-bold uppercase mb-1">Salomão</p>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        Bem-vindo. Se o indicador abaixo estiver vermelho, certifica-te de que executaste "python app.py" no terminal.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 md:p-8 bg-[#1e293b] border-t border-slate-800/50">
+            <div class="max-w-4xl mx-auto">
+                <div class="relative flex items-center">
+                    <input type="text" id="user-input" 
+                        placeholder="Escreva a sua dúvida teológica aqui..." 
+                        class="w-full bg-slate-900 border border-slate-700 rounded-2xl px-6 py-4 pr-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-white transition-all shadow-2xl">
+                    
+                    <button onclick="sendMessage()" id="send-btn"
+                        class="absolute right-2 bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all active:scale-95 disabled:opacity-50">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex justify-between items-center mt-3 px-2">
+                    <p class="text-[10px] text-slate-500">Pressione Enter para enviar</p>
+                    <p id="status-indicator" class="text-[10px] text-yellow-500 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> A verificar servidor...
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
     <script>
-        const chatMessages = document.getElementById('chat-messages');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-        const errorAlert = document.getElementById('error-alert');
-        const API_URL = 'http://127.0.0.1:5000/api/chat';
+        // Forçamos o endereço local padrão do Flask
+        const API_BASE = 'http://127.0.0.1:5000';
 
-        /**
-         * Adiciona uma mensagem ao contêiner de chat.
-         * @param {string} text O texto principal da mensagem.
-         * @param {string} type 'user' ou 'bot'.
-         * @param {string} source A string de fonte (apenas para 'bot').
-         */
-        function addMessage(text, type, source = null) {
-            const messageContainer = document.createElement('div');
-            messageContainer.className = `flex ${type === 'user' ? 'justify-end' : 'justify-start'}`;
+        window.addEventListener('DOMContentLoaded', () => {
+            loadHistory();
+            // Verificar status a cada 5 segundos
+            setInterval(checkServerStatus, 5000);
+        });
 
-            const messageBubble = document.createElement('div');
-            messageBubble.className = `chat-bubble ${type === 'user' ? 'user-message' : 'bot-message'}`;
-            
-            if (type === 'bot') {
-                const name = document.createElement('p');
-                // Nome do bot em azul para destaque
-                name.className = 'font-semibold text-blue-600'; 
-                name.textContent = 'Salomão';
-                messageBubble.appendChild(name);
+        async function checkServerStatus() {
+            const status = document.getElementById('status-indicator');
+            try {
+                const res = await fetch(`${API_BASE}/api/history`, { method: 'GET' });
+                if (res.ok) {
+                    status.className = "text-[10px] text-green-500 flex items-center gap-1";
+                    status.innerHTML = '<span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Servidor Ativo';
+                }
+            } catch (e) {
+                status.className = "text-[10px] text-red-500 flex items-center gap-1";
+                status.innerHTML = '<span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span> Servidor Offline';
             }
-            
-            const textParagraph = document.createElement('p');
-            textParagraph.textContent = text;
-            messageBubble.appendChild(textParagraph);
-
-            if (type === 'bot' && source) {
-                const sourceBox = document.createElement('div');
-                sourceBox.className = 'source-box'; // Estilo definido no <style> para ser discreto
-                sourceBox.textContent = source;
-                messageBubble.appendChild(sourceBox);
-            }
-
-            messageContainer.appendChild(messageBubble);
-            chatMessages.appendChild(messageContainer);
-
-            // Rola automaticamente para a última mensagem
-            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        /**
-         * Exibe ou oculta o indicador de carregamento.
-         * @param {boolean} show Se deve mostrar (true) ou ocultar (false).
-         */
-        function toggleLoading(show) {
-            const loadingId = 'loading-indicator';
-            let loadingIndicator = document.getElementById(loadingId);
-            
-            if (show) {
-                if (!loadingIndicator) {
-                    loadingIndicator = document.createElement('div');
-                    loadingIndicator.id = loadingId;
-                    loadingIndicator.className = 'flex justify-start';
-                    loadingIndicator.innerHTML = `
-                        <div class="chat-bubble bot-message flex space-x-1">
-                            <!-- Pontos de carregamento em azul-400 para combinar com o destaque -->
-                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
-                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
-                            <span class="loading-dot w-2 h-2 bg-blue-400 rounded-full"></span>
-                        </div>
+        async function loadHistory() {
+            const list = document.getElementById('history-list');
+            try {
+                const response = await fetch(`${API_BASE}/api/history`);
+                if (!response.ok) throw new Error();
+                
+                const data = await response.json();
+                list.innerHTML = '';
+                
+                if (data.length === 0) {
+                    list.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">Sem histórico.</p>';
+                    return;
+                }
+
+                data.forEach(item => {
+                    const button = document.createElement('button');
+                    button.className = 'w-full text-left p-3 rounded-xl hover:bg-slate-800 text-sm text-slate-400 truncate transition-all border border-transparent hover:border-slate-700 flex items-center gap-2 group';
+                    button.innerHTML = `
+                        <svg class="w-3 h-3 text-slate-600 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3" stroke-width="2" stroke-linecap="round"/></svg>
+                        <span class="truncate">${item.query}</span>
                     `;
-                    chatMessages.appendChild(loadingIndicator);
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }
-                sendButton.disabled = true;
-                userInput.disabled = true;
-                sendButton.textContent = 'Aguarde...';
-            } else {
-                if (loadingIndicator) {
-                    loadingIndicator.remove();
-                }
-                sendButton.disabled = false;
-                userInput.disabled = false;
-                sendButton.textContent = 'Enviar';
+                    button.onclick = () => displayStaticConversation(item.query, item.answer);
+                    list.appendChild(button);
+                });
+                checkServerStatus();
+            } catch (err) {
+                list.innerHTML = '<p class="text-[10px] text-red-400 text-center py-4 px-2">Não foi possível ligar ao servidor local.</p>';
+                checkServerStatus();
             }
         }
 
-        /**
-         * Envia a mensagem do usuário para o backend Flask.
-         */
+        function displayStaticConversation(query, answer) {
+            const chatWindow = document.getElementById('chat-window');
+            chatWindow.innerHTML = ''; 
+            appendMessage('Tu', query, true);
+            appendMessage('Salomão (Histórico)', answer, false, 'Base de Dados Local');
+        }
+
         async function sendMessage() {
-            const query = userInput.value.trim();
+            const input = document.getElementById('user-input');
+            const btn = document.getElementById('send-btn');
+            const query = input.value.trim();
+
             if (!query) return;
 
-            // 1. Adiciona a mensagem do usuário e limpa o input
-            addMessage(query, 'user');
-            userInput.value = '';
-            errorAlert.classList.add('hidden');
-
-            // 2. Mostra o indicador de carregamento
-            toggleLoading(true);
+            appendMessage('você', query, true);
+            input.value = '';
+            btn.disabled = true;
 
             try {
-                // 3. Faz a requisição POST para o backend
-                const response = await fetch(API_URL, {
+                const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ query: query }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
                 });
 
                 const data = await response.json();
-                
-                // 4. Trata erros HTTP
-                if (!response.ok) {
-                    throw new Error(data.answer || "Erro desconhecido ao comunicar com o servidor.");
+                if (data.answer) {
+                    appendMessage('Salomão', data.answer, false, data.source);
+                    loadHistory();
                 }
-
-                // 5. Adiciona a resposta da IA
-                addMessage(data.answer, 'bot', data.source);
-
             } catch (error) {
-                console.error("Erro na comunicação com o backend:", error);
-                const errorMessage = `ERRO: Verifique se o servidor Flask está rodando em ${API_URL}. Detalhes: ${error.message}`;
-                errorAlert.textContent = errorMessage;
-                errorAlert.classList.remove('hidden');
-                addMessage("Sinto muito, a conexão com o Reino falhou. Por favor, verifique o console para mais detalhes.", 'bot', "Erro Crítico de Rede/Servidor");
+                appendMessage('Sistema', 'Erro de ligação. O app.py está ativo no terminal?', false);
             } finally {
-                // 6. Esconde o indicador de carregamento
-                toggleLoading(false);
+                btn.disabled = false;
             }
         }
+
+        function appendMessage(sender, text, isUser, source = null) {
+            const chatWindow = document.getElementById('chat-window');
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex ${isUser ? 'justify-end' : 'justify-start'} fade-in mb-4`;
+            
+            const bubbleClass = isUser 
+                ? 'bg-blue-600 text-white rounded-tr-none' 
+                : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none';
+
+            wrapper.innerHTML = `
+                <div class="p-4 rounded-2xl ${bubbleClass} max-w-[85%] shadow-xl">
+                    <p class="text-[10px] font-bold uppercase mb-1 opacity-60">${sender}</p>
+                    <div class="text-sm leading-relaxed whitespace-pre-wrap">${text}</div>
+                    ${source ? `<div class="mt-3 pt-2 border-t border-slate-700/50 text-[10px] text-blue-400 font-medium italic">Fonte: ${source}</div>` : ''}
+                </div>
+            `;
+            chatWindow.appendChild(wrapper);
+            chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+        }
+
+        document.getElementById('user-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
     </script>
 </body>
 </html>
